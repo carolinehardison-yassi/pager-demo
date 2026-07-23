@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  go-al2
+  
+  Sample SAM Template for go-al2
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 15
+
+Parameters:
+  SecretsExtensionLayerArn:
+    Type: String
+    # AWS Parameters and Secrets Lambda Extension. The layer ARN is region- and
+    # architecture-specific — look yours up at:
+    # https://docs.aws.amazon.com/secretsmanager/latest/userguide/retrieving-secrets_lambda.html
+    Default: arn:aws:lambda:us-east-1:177933569100:layer:AWS-Parameters-and-Secrets-Lambda-Extension:17
+
+Resources:
+  DemoPagerFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      Architectures:
+        - x86_64
+      CodeUri: main/
+      Handler: bootstrap 
+      Runtime: provided.al2023
+      Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+      Layers:
+        - !Ref SecretsExtensionLayerArn
+      Environment:
+        Variables:
+          # Extension-side debug logging while troubleshooting secret access.
+          PARAMETERS_SECRETS_EXTENSION_LOG_LEVEL: debug
+          SECRET_SOURCE: secretsmanager
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: "arn:aws:secretsmanager:us-east-1:264595824955:secret:google/secret3-*"
+        - SESCrudPolicy:
+            IdentityName: caroline.hardison@yassi.com
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /hello
+            Method: GET
+        CheckPagerEvery5Min:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+            Description: Check the Pager task list for new tasks and email alerts
+    Metadata:
+      BuildMethod: makefile
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HelloWorldAPI:
+    Description: "API Gateway endpoint URL for Prod environment for First Function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+  DemoPagerFunction:
+    Description: "First Lambda Function ARN"
+    Value: !GetAtt DemoPagerFunction.Arn
+  DemoPagerFunctionIamRole:
+    Description: "Implicit IAM Role created for Demo Pager function"
+    Value: !GetAtt DemoPagerFunctionRole.Arn
